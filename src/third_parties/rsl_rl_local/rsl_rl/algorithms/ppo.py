@@ -148,7 +148,69 @@ class PPO:
         ) in generator:
             # TODO ----- START -----
             # Implement the PPO update step
+            if self.normalize_advantage_per_mini_batch:
+                advantage_estimates = (advantage_estimates - advantage_estimates.mean()) / (advantage_estimates.std() + 1e-8)
+            
+            act_kwargs = {}
+            val_kwargs = {}
+
+            if self.actor_critic.is_recurrent:
+                act_kwargs = {"masks": episode_masks, "hidden_states": hidden_states[0]}
+                val_kwargs = {"masks": episode_masks, "hidden_states": hidden_states[1]}
+            
+            # Recompute policy distribution and value under current parameters
+            self.actor_critic.act(observations, **act_kwargs)
+            new_log_probs = self.actor_critic.get_actions_log_prob(sampled_actions).view(-1, 1)
+            values = self.actor_critic.evaluate(critic_observations, **val_kwargs)
+
+            action_mean = self.actor_critic.action_mean
+            action_std = self.actor_critic.action_std
+            entropy = self.actor_critic.entropy
+
+            if entropy.dim() > 1:
+                entropy = entropy.sum(dim=-1)
+            entropy_loss = entropy.mean()
+
+            # PPO clipped surrogate objective
+            ratio = torch.exp(new_log_probs - prev_log_probs)
+            surrogate_val_1 = ratio * advantage_estimates
+            surrogate_val_2 = torch.clamp(ratio, 1.0 - self.clip_param, 1 + self.clip_param) * advantage_estimates
+            surrogate_loss = -torch.min(surrogate_val_1, surrogate_val_2).mean()
+
+            # Value Loss
+            if self.use_clipped_value_loss:
+                value_clipped = value_targets + (values - value_targets).clamp(-self.clip_param, self.clip_param)
+                value_losses = (values - discounted_returns).pow(2)
+                value_losses_clipped = (value_clipped - discounted_returns).pow(2)
+                value_loss = torch.max(value_losses, value_losses_clipped).mean()
+            else:
+                value_loss = (discounted_returns - values).pow(2).mean()
+
+            if self.schedule == "adaptive" and self.desired_kl is not None:
+                with torch.no_grad():
+                    kl = torch.sum(torch.log((action_std + 1e-8)/(prev_action_stds + 1e-8)) + (prev_action_stds.pow(2) + (prev_mean_actions - action_mean).pow(2)) / (2.0 * action_std.pow(2) + 1e-8) - 0.5, dim=-1)
+                    kl_mean = kl.mean()
+
+                    if kl_mean > 2.0 * self.desired_kl:
+                        self.learning_rate = max(1e-5, self.learning_rate / 1.5)
+                    elif 0.0 < kl_mean < 0.5 * self.desired_kl:
+                        self.learning_rate = min(1e-2, self.learning_rate * 1.5)
+                    
+                    for param_group in self.optimizer.param_groups:
+                        param_group["lr"] = self.learning_rate
+            
+            loss = (surrogate_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy_loss)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm)
+            self.optimizer.step()
+
+            mean_value_loss += value_loss.item()
+            mean_surrogate_loss += surrogate_loss.item()
+            mean_entropy += entropy_loss.item()
             # TODO ----- END -----
+            # pass
 
         num_updates = self.num_learning_epochs * self.num_mini_batches
         mean_value_loss /= num_updates

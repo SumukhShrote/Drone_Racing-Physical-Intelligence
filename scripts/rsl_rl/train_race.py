@@ -10,6 +10,11 @@
 import sys
 import os
 
+# To make sure that we have the src
+project_root = os.path.abspath(".")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 local_rsl_path = os.path.abspath("src/third_parties/rsl_rl_local")
 if os.path.exists(local_rsl_path):
     sys.path.insert(0, local_rsl_path)
@@ -122,6 +127,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_cfg.rewards = rewards
 
     # create isaac environment
+    import carb
+    settings = carb.settings.get_settings()
+    settings.set_string("/rtx/rendermode", "PathTracing")
+    settings.set_int("/rtx/pathtracing/spp", 1)
+    settings.set_int("/rtx/pathtracing/totalSpp", 1)
+    settings.set_int("/rtx/pathtracing/clampSpp", 1)
+    settings.set_bool("/rtx/pathtracing/optixDenoiser/enabled", True)
+    settings.set_int("/rtx/pathtracing/maxBounces", 2)
+    settings.set_int("/rtx/pathtracing/maxSpecularAndTransmissionBounces", 1)
+    #settings.set_bool("/rtx/pathtracing/cached/enabled", False)
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None, rewards=rewards)
 
     # convert to single-agent instance if required by the RL algorithm

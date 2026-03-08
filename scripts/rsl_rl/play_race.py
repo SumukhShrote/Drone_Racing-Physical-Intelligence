@@ -9,6 +9,12 @@
 
 import sys
 import os
+
+# To make sure that we have the src
+project_root = os.path.abspath(".")
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 local_rsl_path = os.path.abspath("src/third_parties/rsl_rl_local")
 if os.path.exists(local_rsl_path):
     sys.path.insert(0, local_rsl_path)
