@@ -106,6 +106,16 @@ def main():
     env_cfg.max_motor_noise_std = 0.0
     env_cfg.seed = args_cli.seed
 
+    import carb
+    settings = carb.settings.get_settings()
+    settings.set_string("/rtx/rendermode", "PathTracing")
+    settings.set_int("/rtx/pathtracing/spp", 1)
+    settings.set_int("/rtx/pathtracing/totalSpp", 1)
+    settings.set_int("/rtx/pathtracing/clampSpp", 1)
+    settings.set_bool("/rtx/pathtracing/optixDenoiser/enabled", True)
+    settings.set_int("/rtx/pathtracing/maxBounces", 2)
+    settings.set_int("/rtx/pathtracing/maxSpecularAndTransmissionBounces", 1)
+
     # create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 

@@ -66,8 +66,12 @@ def Xform "crazyflie" (
         double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
 
-        def Xform "body_visual"
+        def Xform "body_visual" (
+            apiSchemas = ["MaterialBindingAPI"]
+        )
         {
+            rel material:binding = </crazyflie/Looks/Material_7>
+
             float3 xformOp:rotateXYZ = (0, 0, 0)
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
@@ -276,9 +280,11 @@ def Xform "crazyflie" (
     }
 
     def Xform "m1_prop" (
-        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
     )
     {
+        rel material:binding = </crazyflie/Looks/Material_6>
+
         point3f physics:centerOfMass = (0, 0, 0)
         float3 physics:diagonalInertia = (2e-9, 1.67e-7, 1.68e-7)
         float physics:mass = 0.0008
@@ -306,9 +312,11 @@ def Xform "crazyflie" (
     }
 
     def Xform "m2_prop" (
-        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
     )
     {
+        rel material:binding = </crazyflie/Looks/Material_6>
+
         point3f physics:centerOfMass = (0, 0, 0)
         float3 physics:diagonalInertia = (2e-9, 1.67e-7, 1.68e-7)
         float physics:mass = 0.0008
@@ -336,9 +344,10 @@ def Xform "crazyflie" (
     }
 
     def Xform "m3_prop" (
-        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
     )
     {
+        rel material:binding = </crazyflie/Looks/Material_6>
         point3f physics:centerOfMass = (0, 0, 0)
         float3 physics:diagonalInertia = (2e-9, 1.67e-7, 1.68e-7)
         float physics:mass = 0.0008
@@ -366,9 +375,11 @@ def Xform "crazyflie" (
     }
 
     def Xform "m4_prop" (
-        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]
+        apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]
     )
     {
+        rel material:binding = </crazyflie/Looks/Material_6>
+        
         point3f physics:centerOfMass = (0, 0, 0)
         float3 physics:diagonalInertia = (2e-9, 1.67e-7, 1.68e-7)
         float physics:mass = 0.0008
@@ -408,7 +419,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.009523815, 0.009523815, 0.009523815) (
+                color3f inputs:diffuse_color_constant = (1.000, 0.009523815, 0.009523815) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -471,7 +482,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.1169535, 0.1169535, 0.1169535) (
+                color3f inputs:diffuse_color_constant = (1.000, 0.1169535, 0.1169535) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -534,7 +545,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.3428556, 0.3428556, 0.3428556) (
+                color3f inputs:diffuse_color_constant = (1.000, 0.3428556, 0.3428556) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -597,7 +608,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.009523815, 0.009523815, 0.009523815) (
+                color3f inputs:diffuse_color_constant = (1.000, 0.009523815, 0.009523815) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -660,7 +671,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0.1169535, 0.1169535, 0.1169535) (
+                color3f inputs:diffuse_color_constant = (1.000, 0.1169535, 0.1169535) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -861,7 +872,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0, 0, 0) (
+                color3f inputs:diffuse_color_constant = (1.000, 0, 0) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -924,7 +935,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0, 0, 0) (
+                color3f inputs:diffuse_color_constant = (1.000, 0, 0) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
@@ -987,7 +998,7 @@ def Xform "crazyflie" (
                 uniform token info:implementationSource = "sourceAsset"
                 uniform asset info:mdl:sourceAsset = @OmniPBR.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "OmniPBR"
-                color3f inputs:diffuse_color_constant = (0, 0, 0) (
+                color3f inputs:diffuse_color_constant = (1.000, 0, 0) (
                     customData = {
                         float3 default = (0.2, 0.2, 0.2)
                         dictionary range = {
