@@ -36,17 +36,19 @@ class DefaultQuadcopterStrategy:
 
         # Reward defaults. Anything in self.env.rew overrides these.
         self.reward_defaults = {
-            "gate_pass_reward_scale": 15.0,
-            "lap_reward_scale": 40.0,
-            "progress_reward_scale": 3.0,
-            "center_reward_scale": 0.5,
-            "align_reward_scale": 0.25,
-            "speed_reward_scale": 0.10,
+            "gate_pass_reward_scale": 60.0,
+            "lap_reward_scale": 80.0,
+            "progress_reward_scale": 1.0,
+            "center_reward_scale": 0.0,
+            "align_reward_scale": 0.5,
+            "speed_reward_scale": 0.5,
             "action_mag_reward_scale": -0.01,
             "ang_vel_reward_scale": -0.005,
             "crash_reward_scale": -2.0,
             "time_penalty_reward_scale": -0.01,
+            "miss_reward_scale": 8.0,
         }
+
         self.death_cost_default = -10.0
 
         self.reward_terms = [
@@ -60,6 +62,7 @@ class DefaultQuadcopterStrategy:
             "ang_vel",
             "crash",
             "time_penalty",
+            "miss",
         ]
 
         # Initialize episode sums for logging if in training mode
@@ -222,6 +225,7 @@ class DefaultQuadcopterStrategy:
         inside_gate = (curr_y.abs() <= gate_margin) & (curr_z.abs() <= gate_margin)
         crossed_plane = (prev_x > 0.0) & (curr_x <= 0.0)
         gate_passed = crossed_plane & inside_gate
+        missed_gate = crossed_plane & (~inside_gate)
 
         old_idx = self.env._idx_wp.clone()
         passed_ids = torch.where(gate_passed)[0]
@@ -236,10 +240,20 @@ class DefaultQuadcopterStrategy:
         self.env._desired_pos_w[:] = self.env._waypoints[self.env._idx_wp, :3]
 
         # Dense signed progress through the gate plane.
-        progress = torch.clamp(prev_x - curr_x, min=-0.25, max=0.25)
+        raw_progress = torch.clamp(prev_x - curr_x, min=-0.25, max=0.25)
 
-        # Keep center-of-gate traversal attractive but secondary.
-        center_reward = 1.0 - torch.tanh(yz_error / 0.5)
+        # Only reward approach while still before the gate plane
+        progress = torch.where(curr_x > 0.0, raw_progress, torch.zeros_like(raw_progress))
+
+        # Only shape centering while approaching the gate, not after blowing past it
+        center_reward = torch.where(
+            # curr_x > -0.10,
+            curr_x > 0.0,
+            1.0 - torch.tanh(yz_error / 0.30),
+            torch.zeros_like(yz_error),
+        )
+
+        miss_penalty = missed_gate.float()
 
         # Body-frame gate observations for alignment/speed shaping.
         drone_pos_w = self.env._robot.data.root_link_pos_w
@@ -290,6 +304,7 @@ class DefaultQuadcopterStrategy:
             "ang_vel": ang_vel_mag * self._reward_scale("ang_vel_reward_scale"),
             "crash": crash_reward * self._reward_scale("crash_reward_scale"),
             "time_penalty": time_penalty * self._reward_scale("time_penalty_reward_scale"),
+            "miss": -miss_penalty * self._reward_scale("miss_reward_scale"),
         }
 
         reward = torch.zeros(self.num_envs, device=self.device)
@@ -323,12 +338,15 @@ class DefaultQuadcopterStrategy:
 
         curr_idx = self.env._idx_wp
         next_idx = (curr_idx + 1) % self.env._waypoints.shape[0]
+        next_next_idx = (curr_idx + 2) % self.env._waypoints.shape[0]
 
         curr_gate_pos_w = self.env._waypoints[curr_idx, :3]
         next_gate_pos_w = self.env._waypoints[next_idx, :3]
+        next_next_gate_pos_w = self.env._waypoints[next_next_idx, :3]
 
         curr_gate_pos_b, _ = subtract_frame_transforms(drone_pos_w, drone_quat_w, curr_gate_pos_w)
         next_gate_pos_b, _ = subtract_frame_transforms(drone_pos_w, drone_quat_w, next_gate_pos_w)
+        next_next_gate_pos_b, _ = subtract_frame_transforms(drone_pos_w, drone_quat_w, next_next_gate_pos_w)
 
         curr_gate_tip_w = curr_gate_pos_w + self.env._normal_vectors[curr_idx]
         next_gate_tip_w = next_gate_pos_w + self.env._normal_vectors[next_idx]
@@ -345,6 +363,7 @@ class DefaultQuadcopterStrategy:
                 drone_ang_vel_b / 10.0,
                 curr_gate_pos_b / 5.0,
                 next_gate_pos_b / 5.0,
+                next_next_gate_pos_b / 5.0,
                 curr_gate_normal_b,
                 next_gate_normal_b,
                 self.env._pose_drone_wrt_gate / 5.0,
@@ -365,7 +384,7 @@ class DefaultQuadcopterStrategy:
         if env_ids is None or len(env_ids) == self.num_envs:
             env_ids = self.env._robot._ALL_INDICES
         
-        if self.cfg.is_train:
+        if self.cfg.is_train and torch.any(self.env.episode_length_buf[env_ids] > 0):
             self._update_curriculum_from_performance(env_ids)
 
         # Logging for training mode
@@ -434,13 +453,12 @@ class DefaultQuadcopterStrategy:
         self._apply_domain_randomization(env_ids)
 
         if self.cfg.is_train:
+            
             alpha = self._curriculum_alpha()
+            
             num_gates = self.env._waypoints.shape[0]
-
-            # Curriculum over which part of the track is sampled.
-            max_gate_index = max(1, int(round(1 + alpha * (num_gates - 1))))
-            waypoint_indices = torch.randint(
-                low=0, high=max_gate_index, size=(n_reset,), device=self.device, dtype=self.env._idx_wp.dtype
+            waypoint_indices = torch.randint(  # Random across ALL gates
+                low=0, high=num_gates, size=(n_reset,), device=self.device, dtype=self.env._idx_wp.dtype
             )
 
             # Easy early resets: close to gate, low lateral/yaw/speed noise.
@@ -497,13 +515,14 @@ class DefaultQuadcopterStrategy:
             default_root_state[:, 10:13] = 0.0
 
         else:
-            x_local = torch.empty(1, device=self.device).uniform_(-3.0, -0.5)
-            y_local = torch.empty(1, device=self.device).uniform_(-1.0, 1.0)
-
             x0_wp = self.env._waypoints[self.env._initial_wp, 0]
             y0_wp = self.env._waypoints[self.env._initial_wp, 1]
             z0_wp = self.env._waypoints[self.env._initial_wp, 2]
             theta = self.env._waypoints[self.env._initial_wp, -1]
+
+            # Fixed centered start for play/debug
+            x_local = torch.tensor([-1.5], device=self.device)
+            y_local = torch.tensor([0.0], device=self.device)
 
             cos_theta, sin_theta = torch.cos(theta), torch.sin(theta)
             x_rot = cos_theta * x_local - sin_theta * y_local
@@ -527,9 +546,11 @@ class DefaultQuadcopterStrategy:
             )
             default_root_state[:, 3:7] = quat
             default_root_state[:, 7:13] = 0.0
+
             waypoint_indices = torch.full(
                 (1,), int(self.env._initial_wp), device=self.device, dtype=self.env._idx_wp.dtype
             )
+
 
         self.env._idx_wp[env_ids] = waypoint_indices
         self.env._desired_pos_w[env_ids] = self.env._waypoints[waypoint_indices, :3].clone()

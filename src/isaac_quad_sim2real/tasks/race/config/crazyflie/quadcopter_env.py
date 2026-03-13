@@ -247,7 +247,7 @@ class QuadcopterEnv(DirectRLEnv):
         if len(cfg.rewards) > 0:
             self.rew = cfg.rewards
         elif self.cfg.is_train:
-            raise ValueError("rewards not provided")
+            self.rew = {}
 
         # Initialize tensors
         self._actions = torch.zeros(self.num_envs, self.cfg.action_space, device=self.device)
@@ -676,12 +676,26 @@ class QuadcopterEnv(DirectRLEnv):
         #TODO ----- START ----- [OPTIONAL]
         # Consider adding additional _get_dones() conditions to influence training. Note that the additional conditions
         # will not be used during runtime for the official class race.
+        curr_x = self._pose_drone_wrt_gate[:, 0]
+        curr_y = self._pose_drone_wrt_gate[:, 1]
+        curr_z = self._pose_drone_wrt_gate[:, 2]
+        prev_x = self._prev_x_drone_wrt_gate
+
+        gate_half = 0.5 * float(self.cfg.gate_model.gate_side)
+        gate_margin = 0.90 * gate_half
+
+        inside_gate = (curr_y.abs() <= gate_margin) & (curr_z.abs() <= gate_margin)
+        crossed_plane = (prev_x > 0.0) & (curr_x <= 0.0)
+
+        cond_missed_gate = crossed_plane & (~inside_gate)
+
         #TODO ----- END ----- [OPTIONAL]
 
         died = (
             cond_max_h
           | cond_h_min_time
           | cond_crashed
+          | cond_missed_gate
         )
 
         # timeout conditions
