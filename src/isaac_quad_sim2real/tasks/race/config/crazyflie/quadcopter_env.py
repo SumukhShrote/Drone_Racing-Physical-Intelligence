@@ -66,7 +66,7 @@ CRAZYFLIE_CFG = ArticulationCfg(
         copy_from_source=False,
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.5),
+        pos=(0.0, 0.0, 0.1),
         joint_pos={
             ".*": 0.0,
         },
@@ -195,11 +195,13 @@ class QuadcopterEnvCfg(DirectRLEnvCfg):
     max_altitude = 3.0
     max_time_on_ground = 1.5
 
+    control_latency_steps = 2   # 40ms communication delay
+
     # motor dynamics
     arm_length = 0.043
     k_eta = 2.3e-8
     k_m = 7.8e-10
-    tau_m = 0.005
+    tau_m = 0.015
     motor_speed_min = 0.0
     motor_speed_max = 2500.0
 
@@ -264,6 +266,9 @@ class QuadcopterEnv(DirectRLEnv):
 
         self._desired_pos_w = torch.zeros(self.num_envs, 3, device=self.device)
 
+        self._action_queue = torch.zeros(self.cfg.control_latency_steps + 1, self.num_envs, self.cfg.action_space, device=self.device)
+        self._control_latency_steps = torch.ones(self.num_envs, dtype=torch.long, device=self.device) * self.cfg.control_latency_steps
+
         self._last_distance_to_goal = torch.zeros(self.num_envs, device=self.device)
         self._yaw_n_laps = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
 
@@ -274,7 +279,7 @@ class QuadcopterEnv(DirectRLEnv):
         self._crashed = torch.zeros(self.num_envs, device=self.device, dtype=torch.int)
 
         # Motor dynamics
-        self.cfg.thrust_to_weight = 3.15
+        self.cfg.thrust_to_weight = 3.30
         r = self.cfg.arm_length * np.sqrt(2.0) / 2.0
         self._rotor_positions = torch.tensor(
             [
@@ -405,6 +410,12 @@ class QuadcopterEnv(DirectRLEnv):
         #########################
 
         tracks = {
+            'circle': [
+            [ 0.0 , 3.0 , 0.75 , 0.0 , 0.0 , 0.00] ,
+            [ -1.5 , 4.5 , 0.75 , 0.0 , 0.0 , -1.57] ,
+            [ 0.0 , 6.0 , 1.75 , 0.0 , 0.0 , 3.14] ,
+            [ 1.5 , 4.5 , 0.75 , 0.0 , 0.0 , 1.57]
+            ],
             'complex': [
                 [ 1.5,  3.5, 0.75, 0.0, 0.0, -0.7854],
                 [-1.5,  3.5, 0.75, 0.0, 0.0,  0.7854],
@@ -413,6 +424,7 @@ class QuadcopterEnv(DirectRLEnv):
                 [ 1.0, -1.0, 2.00, 0.0, 0.0,  3.1415],
                 [ 1.0, -3.5, 0.75, 0.0, 0.0,  0.0000],
             ],
+        
             'powerloop': [
                 [2.0, 3.5, 0.75, 0.0, 0.0, -1.5708],
                 [-1.5, 3.5, 2.00, 0.0, 0.0, 0.7854],
@@ -623,10 +635,20 @@ class QuadcopterEnv(DirectRLEnv):
     ##########################################################
 
     def _pre_physics_step(self, actions: torch.Tensor):
-        self._actions = actions.clone().clamp(-1.0, 1.0)    # actions come directly from the NN
-        self._actions = self.cfg.beta * self._actions + (1 - self.cfg.beta) * self._previous_actions
-
-        # Store current actions for next timestep (for action smoothing and observations)
+        self._action_queue = torch.roll(self._action_queue, shifts=-1, dims=0)
+        self._action_queue[-1] = actions.clone().clamp(-1.0, 1.0)
+        
+        queue_len = self._action_queue.shape[0]
+        delay_idx = torch.clamp(
+            (queue_len - 1) - self._control_latency_steps,
+            min=0,
+            max=queue_len - 1
+        )
+        
+        env_arange = torch.arange(self.num_envs, device=self.device)
+        delayed_actions = self._action_queue[delay_idx, env_arange]
+        
+        self._actions = self.cfg.beta * delayed_actions + (1 - self.cfg.beta) * self._previous_actions
         self._previous_actions = self._actions.clone()
 
         self._wrench_des[:, 0] = ((self._actions[:, 0] + 1.0) / 2.0) * self._robot_weight * self._thrust_to_weight
@@ -682,7 +704,7 @@ class QuadcopterEnv(DirectRLEnv):
         prev_x = self._prev_x_drone_wrt_gate
 
         gate_half = 0.5 * float(self.cfg.gate_model.gate_side)
-        gate_margin = 0.90 * gate_half
+        gate_margin = 0.40 * gate_half
 
         inside_gate = (curr_y.abs() <= gate_margin) & (curr_z.abs() <= gate_margin)
         crossed_plane = (prev_x > 0.0) & (curr_x <= 0.0)
