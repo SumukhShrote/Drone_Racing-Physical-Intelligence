@@ -2,6 +2,10 @@
 
 This project repository contains the code for the drone racing environment, training, and evaluation using NVIDIA Isaac Lab. The repo also includes a custom copy of the rsl_rl robot learning library where you will implement Proximal Policy Optimization (PPO).
 
+
+https://github.com/user-attachments/assets/ba530c1a-a35e-4900-b4df-0bc851d4baaf
+
+
 ## Setup Instructions
 
 * Enter your **home** directory, then git clone the project repository. It is critical that the project repo and the Isaac Lab directory are at the same level.
