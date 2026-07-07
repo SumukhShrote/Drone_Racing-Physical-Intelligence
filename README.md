@@ -7,7 +7,7 @@ This project repository contains the code for the drone racing environment, trai
 * Enter your **home** directory, then git clone the project repository. It is critical that the project repo and the Isaac Lab directory are at the same level.
 
 ```bash
-
+https://github.com/SumukhShrote/Drone_Racing-Physical-Intelligence.git
 ```
 
 ## Training
